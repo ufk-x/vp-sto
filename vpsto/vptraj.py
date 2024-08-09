@@ -100,7 +100,7 @@ class VPTraj:
 
         return q, dq, ddq, p, T
 
-    def get_min_duration(self, p, q0, dq0=None, qT=None, dqT=None):
+    def get_min_duration(self, p, q0, dq0=None, qT=None, dqT=None, ignore_first=False):
         # Compute the minimum duration the trajectory can have such that the
         # velocity and acceleration limits are not violated.
         #
@@ -139,13 +139,17 @@ class VPTraj:
             q_via_list = np.concatenate((q0, p, qT), axis=1)
             dq_list = np.concatenate((dq0, dqT), axis=1)
 
-        dq_q = (q_via_list @ self.dPhi[self.ndof:,:-2*self.ndof].T).reshape(batch_size, -1, self.ndof)
-        dq_dq = (dq_list @ self.dPhi[self.ndof:,-2*self.ndof:].T).reshape(batch_size, -1, self.ndof)
+        if ignore_first:
+            i_start = self.ndof
+        else:
+            i_start = 0
+        dq_q = (q_via_list @ self.dPhi[i_start:,:-2*self.ndof].T).reshape(batch_size, -1, self.ndof)
+        dq_dq = (dq_list @ self.dPhi[i_start:,-2*self.ndof:].T).reshape(batch_size, -1, self.ndof)
         T_dq = np.maximum(np.max(dq_q / (self.vel_lim - dq_dq), axis=(1, 2)),
                           np.max(- dq_q / (self.vel_lim + dq_dq), axis=(1, 2)))
         
-        ddq_q = (q_via_list @ self.ddPhi[self.ndof:,:-2*self.ndof].T).reshape(batch_size, -1, self.ndof)
-        ddq_dq = (dq_list @ self.ddPhi[self.ndof:,-2*self.ndof:].T).reshape(batch_size, -1, self.ndof)
+        ddq_q = (q_via_list @ self.ddPhi[i_start:,:-2*self.ndof].T).reshape(batch_size, -1, self.ndof)
+        ddq_dq = (dq_list @ self.ddPhi[i_start:,-2*self.ndof:].T).reshape(batch_size, -1, self.ndof)
         T_p = ddq_dq / (2. * self.acc_lim)
         T_ddq = np.maximum(np.max(T_p + np.nan_to_num(np.sqrt(T_p**2 + ddq_q / self.acc_lim), nan=-np.inf), axis=(1, 2)),
                            np.max(-T_p + np.nan_to_num(np.sqrt(T_p**2 - ddq_q / self.acc_lim), nan=-np.inf), axis=(1, 2)))
@@ -234,7 +238,7 @@ class VPTraj:
         return q, dq, ddq
     
     def __setup_basis(self):
-        s_eval = np.linspace(0., 1., self.N_eval)
+        s_eval = np.linspace(0., 1.-1e-9, self.N_eval)
         self.obf = OBF(self.ndof)
         self.obf.setup_task(np.ones(self.N_via)/self.N_via)
         
