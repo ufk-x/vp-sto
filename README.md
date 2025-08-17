@@ -1,8 +1,11 @@
 ## Via-Point based Stochastic Trajectory Optimization
 
+[Getting started and mastery guide: Instrument.md](./Instrument.md)
+
 This repository contains python code for hands-on numerical, gradient-free, time-optimal trajectory optimization. It implements the [VP-STO](https://sites.google.com/oxfordrobotics.institute/vp-sto) stochastic trajectory optimizer. The code is intended for offline planning purposes.
 
 Features:
+
 - Implement your objective as a function of positions, velocities, accelerations and total duration of the trajectory, **no gradient** needed.
 - Define **initial position, initial velocity and final velocity**, the solution is internally constrained to those (no extra cost term needed).
 - Define **velocity and acceleration limits**, the solution is internally constrained to those (no extra cost term needed).
@@ -11,25 +14,21 @@ Features:
 - Use a low resolution for fast optimization, and a high resolution for the final solution due to the **time-continuous trajectory representation**.
 - **Linear scaling** of the computational complexity with the number of DoFs: Easy-to-adopt for planning joint-space trajectories of robot arms, e.g. Franka Emika robot.
 
-<img src="media/sampling_banner.gif" 
-        alt="MPC Navigation"
-        style="display: block; margin: 0 auto" />
+![MPC Navigation](media/sampling_banner.gif)
 *The process of optimizing for collision-free, time-optimal trajectories in cluttered environments (check out the [example code](https://github.com/JuJankowski/vp-sto/blob/dev/examples/2D_collision_avoidance_set_final_position.ipynb) for reproducing the left environment).*
 
-<!-- Make the next image centered -->
-<img src="media/mpc_animation.gif" 
-        alt="MPC Navigation"
-        style="display: block; margin: 0 auto" />
+![MPC Navigation](media/mpc_animation.gif)
 *VP-STO used in a Model-predictive Control task for navigating in dynamic environments (check out the [example code](https://github.com/JuJankowski/vp-sto/blob/dev/examples/2D_predictive_sampling.ipynb) for reproducing the results).*
 
 ---
+
 ### Dependencies
 
-The optimization algorithm depends on [numpy](https://numpy.org), [threaded](https://pypi.org/project/threaded) and [pycma](https://github.com/CMA-ES/pycma). Those can be installed by
+The optimization algorithm depends on [numpy](https://numpy.org), [threaded](https://pypi.org/project/threaded) and [cma (pycma)](https://pypi.org/project/cma/). Those can be installed by
 
     pip install numpy
     pip install threaded
-    pip install git+https://github.com/CMA-ES/pycma.git@master
+    pip install cma
 
 Optional: The example notebooks additionally depend on [matplotlib](https://matplotlib.org/stable/index.html) and [shapely](https://pypi.org/project/shapely/). Those can be installed by
 
@@ -37,6 +36,7 @@ Optional: The example notebooks additionally depend on [matplotlib](https://matp
     pip install shapely
 
 ---
+
 ### Install
 
 Clone the repository to your machine and install locally using:
@@ -44,10 +44,11 @@ Clone the repository to your machine and install locally using:
     git clone https://github.com/JuJankowski/vp-sto
     cd vp-sto
     pip install .
-    
+
 Note: If you want to install vp-sto in a conda environment, make sure to use the pip binary that is installed through conda.
-    
+
 ---
+
 ### Examples
 
 The [examples](https://github.com/JuJankowski/vp-sto/tree/dev/examples) folder contains compact python notebooks with implementations for simple toy examples. They demonstrate the easy-to-use optimization interface and example implementations of typical discontinuous cost terms (e.g. collision avoidance). For a first overview, it is recommended to run the examples.

@@ -1,3 +1,14 @@
+'''
+Author: Fang Kai[thissfk@qq.com]
+Date: 2025-08
+LastEditors: Fang Kai[thissfk@qq.com]
+LastEditTime: 2025-08
+FilePath: vpsto.py
+Description: 
+           If you need more information,
+please contact Fang Kai[thissfk@qq.com] to get an access.   
+Copyright (c) 2025 by Fang Kai, All Rights Reserved. 
+'''
 import numpy as np
 import cma
 import concurrent.futures
