@@ -2,7 +2,7 @@
 Author: Fang Kai[thissfk@qq.com]
 Date: 2025-08
 LastEditors: Fang Kai[thissfk@qq.com]
-LastEditTime: 2025-08
+LastEditTime: 2025-09
 FilePath: vpsto.py
 Description: 
            If you need more information,
@@ -103,7 +103,7 @@ class VPSTO():
         # p_init: initial guess for the via-point parameters
         self.p_init = p_init
         
-    def minimize(self, loss, q0, dq0=None, qT=None, dqT=None, T=None):
+    def minimize(self, loss, q0, dq0=None, qT=None, dqT=None, T=None,sigma_init=None):
         # Run the optimization
         # loss: loss function. Must take a dictionary of the form 
         # {'pos': q, 'vel': dq, 'acc': ddq, 'T': T}
@@ -115,6 +115,9 @@ class VPSTO():
         # T: duration of the movement (optional), default: None
 
         # Check input
+        if sigma_init is not None:
+            self.opt.sigma_init = sigma_init
+
         if dq0 is None:
             dq0 = np.zeros(self.opt.ndof)
         if dqT is None and T is None:

@@ -98,7 +98,8 @@ pip -V
 pip install numpy
 pip install threaded
 pip install cma
-pip install git+https://github.com/CMA-ES/pycma.git@master
+# 使用上述命令则不使用下述命令
+# pip install git+https://github.com/CMA-ES/pycma.git@master
 pip install matplotlib shapely jupyter imageio
 ```
 
@@ -258,7 +259,7 @@ cma.CMAOptions()['seed'] = 42  # 若使用原生 cma 接口；本项目中可先
      ```python
      import matplotlib.pyplot as plt
      import imageio.v2 as imageio
-   
+      
      frames = []
      for k, qk in enumerate(trajectory_seq):  # trajectory_seq 为每个 MPC 步的轨迹/状态，可参考示例变量
          plt.figure()
@@ -269,7 +270,7 @@ cma.CMAOptions()['seed'] = 42  # 若使用原生 cma 接口；本项目中可先
          plt.savefig(frame_path, dpi=150)
          plt.close()
          frames.append(imageio.imread(frame_path))
-   
+      
      imageio.mimsave('media/exp_mpc_navigation.gif', frames, fps=10)
      ```
 

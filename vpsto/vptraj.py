@@ -1,3 +1,14 @@
+'''
+Author: Fang Kai[thissfk@qq.com]
+Date: 2025-08
+LastEditors: Fang Kai[thissfk@qq.com]
+LastEditTime: 2025-08
+FilePath: vptraj.py
+Description: 
+           If you need more information,
+please contact Fang Kai[thissfk@qq.com] to get an access.   
+Copyright (c) 2025 by Fang Kai, All Rights Reserved. 
+'''
 import numpy as np
 from .obf import OBF
 
@@ -22,7 +33,7 @@ class VPTraj:
         # dqT: final velocity, will be assumed to be contained in p if not given
         # Q: precision matrix for qT, ignored if qT is None
         # R: penalization matrix for accelerations over time, assumed to be 1 if not given
-        # p_prior: prior mean for via-point parameters
+        # mu_prior: prior mean for via-point parameters
         # P_prior: prior precision for via-point parameters
         # T: duration of the trajectory, will be computed if not given
 
