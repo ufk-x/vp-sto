@@ -105,6 +105,7 @@ class MPC:
     self.opts_direct.vel_lim = vel_lim
     self.opts_direct.acc_lim = acc_lim
     self.opts_direct.N_via = 2  # 使用2个通过点以避免维度问题
+    self.opts_direct.N_eval = 100
     self.opts_direct.max_iter = 50  # 减少迭代次数加快速度
     self.opts_direct.pop_size = 20  # 减少种群大小
     # 直接路径优化器
@@ -114,10 +115,11 @@ class MPC:
     self.opts = VPSTOOptions(self.ndof)
     self.opts.vel_lim = vel_lim
     self.opts.acc_lim = acc_lim
-    self.opts.N_via = 5
-    self.opts.max_iter = 300  # 增加最大迭代次数
+    self.opts.N_via = 4  # 使用4个通过点
+    self.opts.N_eval = 100
     self.opts.pop_size = 50   # 增加种群大小
-    self.opts.sigma_init = 1.0 # 增加初始方差
+    self.opts.max_iter = 300  # 增加最大迭代次数
+    self.opts.sigma_init = 1.5 # 增加初始方差
     # 多路点优化器
     self.traj_opt = VPSTO(self.opts)
 
@@ -135,6 +137,7 @@ class MPC:
     self.compute_time_log = []  # 记录每次优化的计算时间
     self.is_success = False # 记录mpc是否成功
     self.total_time = 0.0 # 记录mpc总时间
+    self.direct_pts_log = [] # 记录0路点轨迹
   
   """ 清除记录 """
   def clear_log(self):
@@ -146,16 +149,17 @@ class MPC:
     self.compute_time_log = []  # 记录每次优化的计算时间
     self.is_success = False # 记录mpc是否成功
     self.total_time = 0.0 # 记录mpc总时间
+    self.direct_pts_log = [] # 记录0路点轨迹
 
   """ 热启动 """
   def warmStart(self):
     self.traj_opt.set_initial_guess(self.sol_log[-1].p_best)
-    self.opt_sigma_init = 1.0
+    self.opt_sigma_init = 1.5
 
   """探索模式"""
   def exploreInit(self):
     self.traj_opt.set_initial_guess(None)
-    self.opt_sigma_init = 2.5
+    self.opt_sigma_init = 3.0
      
   """ 单步MPC """
   def mpc_single(self, q, dq):
@@ -168,6 +172,7 @@ class MPC:
     dq = np.array(dq).flatten()
     
     # 获取直接路径solution
+    is_direct_chosen = False
     sol_direct = self.traj_opt_direct.minimize(loss=loss, q0=q, dq0=dq, qT=self.qT, dqT=self.dqT)
     t_traj_dir = np.linspace(0, sol_direct.T_best, 1000)
     pos_direct, _, _ = sol_direct.get_posvelacc(t_traj_dir)
@@ -177,6 +182,7 @@ class MPC:
         print("Using direct 0-via-point solution.")
         self.sol_valid_log.append(True)
         self.sol_log.append(sol_direct)
+        is_direct_chosen = True
     else: # 否则用多路点优化器
         if self.sol_valid_log[-1]==True:
           # 如果上次路径有效，则用上次路径初始化 warm start
@@ -215,10 +221,11 @@ class MPC:
       pos_end = np.array(pos_end).flatten()
       vel_end = np.array(vel_end).flatten()
       acc_end = np.array(acc_end).flatten()
-      
+      # 匀加速运动
       ddq_next = acc_end
       dq_next = vel_end + acc_end*delta_t
       q_next = pos_end + vel_end*delta_t + 0.5*acc_end*(delta_t**2)
+
     # 否则取dt_mpc时刻的状态
     else:
       q_next, dq_next, ddq_next = self.sol_log[-1].get_posvelacc(self.dt_mpc)
@@ -227,6 +234,10 @@ class MPC:
     q_next = np.array(q_next).flatten()
     dq_next = np.array(dq_next).flatten() 
     ddq_next = np.array(ddq_next).flatten()
+
+    # 记录采用0路点轨迹的位置
+    if is_direct_chosen:
+      self.direct_pts_log.append(q_next)
 
     # 记录计算时间
     compute_time = time.time() - start_time
@@ -246,7 +257,7 @@ class MPC:
     return np.linalg.norm(self.q_log[-1] - self.qT)
   
   """计算性能统计"""
-  def get_computation_stats(self):
+  def fetch_performance_statistics(self):
       stats = {
           'success': self.is_success,
           'final_distance': self.get_maintain_dis(),
@@ -258,8 +269,8 @@ class MPC:
       return stats
   
   """打印性能统计"""
-  def print_stats(self):
-      stats = self.get_computation_stats()
+  def display_computation_statistics(self):
+      stats = self.fetch_performance_statistics()
       print("\n simulation :")
       print(f"  任务成功: {stats['success']}")
       print(f"  仿真时间: {stats['total_time']:.2f}s") 
@@ -281,9 +292,7 @@ class MPC:
     
     step = 0
     while step < N_mpc :
-      # 间歇显示进度，显示与目标距离
-      if step % 50 == 0:
-        print(f"MPC step {step}: maintain distance to goal = {self.get_maintain_dis():.4f}")
+      print(f"\n--- MPC step {step} ---")
 
       # 检查是否到达目标
       if self.is_goal_reached(q, dq):
@@ -320,7 +329,7 @@ class MPC:
     self.total_time = step * self.dt_mpc
 
     """打印性能统计"""
-    self.print_stats()
+    self.display_computation_statistics()
     
   """ 获取位置、速度、加速度的记录 """
   def get_pos_vel_acc_log(self):
@@ -334,8 +343,8 @@ q0 = np.array([0.4, 0.3])          # 初始位置
 dq0 = np.array([0.0, 0.0])         # 初始速度
 qT = np.array([0.15, 0.2])          # 目标位置
 dqT = np.array([0.0, 0.0])         # 目标速度
-vel_lim = 0.5*np.ones(dof)        # 速度限制
-acc_lim = 1.0*np.ones(dof)        # 加速度
+vel_lim = 0.1*np.ones(dof)        # 速度限制
+acc_lim = 0.5*np.ones(dof)        # 加速度
 dt_mpc = 0.05                        # mpc控制时间步长
 T_mpc = 20.0                         # mpc执行最大时长
 
@@ -350,12 +359,14 @@ mpc_loop_num = 1
 pos_profile_log = []
 vel_profile_log = []
 acc_profile_log = []
+direct_profile_log = []
 for i in range(mpc_loop_num):
   mpc.mpc_loop(N_mpc)
   q_log, dq_log, ddq_log = mpc.get_pos_vel_acc_log()
   pos_profile_log.append(q_log)
   vel_profile_log.append(dq_log)
   acc_profile_log.append(ddq_log)
+  direct_profile_log.append(np.array(mpc.direct_pts_log))
 
 # =============================================================================
 # 可视化环境设置
@@ -372,8 +383,12 @@ plt.plot(qT[0], qT[1], 'k*', markersize=10, label='Target')
 # 遍历获取位置记录
 for i in range(mpc_loop_num):
   q_log = pos_profile_log[i]
+  direct_pts_log = direct_profile_log[i]
   label = 'MPC Path' if i == 0 else None  # 只为第一个路径添加标签
   plt.plot(q_log[:, 0], q_log[:, 1], 'b-', label=label)
+  label = 'Direct 0-via-point Path' if i == 0 else None  # 只为第一个路径添加标签
+  if len(direct_pts_log)>0:
+    plt.plot(direct_pts_log[:, 0], direct_pts_log[:, 1], 'r--', label=label)
 
 plt.xlim(q_min[0]-0.05, q_max[0]+0.05)
 plt.ylim(q_min[1]-0.05, q_max[1]+0.05) 
