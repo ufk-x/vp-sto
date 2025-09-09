@@ -344,7 +344,7 @@ dq0 = np.array([0.0, 0.0])         # 初始速度
 qT = np.array([0.15, 0.2])          # 目标位置
 dqT = np.array([0.0, 0.0])         # 目标速度
 vel_lim = 0.1*np.ones(dof)        # 速度限制
-acc_lim = 0.5*np.ones(dof)        # 加速度
+acc_lim = 0.*np.ones(dof)        # 加速度
 dt_mpc = 0.05                        # mpc控制时间步长
 T_mpc = 20.0                         # mpc执行最大时长
 
