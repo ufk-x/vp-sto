@@ -172,7 +172,7 @@ def loss(candidates):
 
 def mpc(q,dq,sol = None):
     global t_local
-    sol_ = sol
+    sol_ = sol # 保存上一个solution
     if sol == None or sol.c_best>sol.T_best+10:
         sigma = 3
         p_init =None
@@ -181,6 +181,7 @@ def mpc(q,dq,sol = None):
         print("sol.c_best",sol.c_best)
         p_init = sol.p_best
     time1 = time.time()
+    # 生成新的solution
     sol = vpsto.cma_trajectory(loss, q0=q, dq0=dq, dqT=dqT,sigma_init=sigma,p_init=p_init)
     print("t_local",t_local)
     print("ex",env.x)
@@ -189,7 +190,7 @@ def mpc(q,dq,sol = None):
 
     print("dt",time2 - time1)
     # 运行优化
-    if sol_ is not None:
+    if sol_ is not None: # 如果上一次的solution存在并且更好
         if sol_.c_best < sol.c_best:
             sol = sol_
             print("111")
