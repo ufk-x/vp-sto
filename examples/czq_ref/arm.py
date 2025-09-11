@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib import animation
 import datetime
+import os
 
 # =======================
 # 机械臂建模
@@ -170,7 +171,7 @@ def plotCartesianSpace(it):
         print("pbest1",sol.p_best)
         print("pbest2",sol.p_best[-2:])
         q_via_best = sol.p_best  # 优化后的路径点
-        for i in range(len(q_via_best)):
+        for i in range(len(q_via_best)//2):
             print("q_via_best",q_via_best[i*2:(i+1)*2])
             plotRobot(ax, robot, q_via_best[i*2:(i+1)*2], color='m')  # 路径点（品红色）
             # plotRobot(ax, robot, qT, color='m')  # 路径点（品红色）
@@ -184,7 +185,11 @@ def plotCartesianSpace(it):
         X[i] = robot.fk(q_traj[i])  # 计算机械臂轨迹的关节点坐标
     plt.plot(X[:,-1,0], X[:,-1,1], c='m', alpha=0.8, label='arm trajectory')  # 绘制末端轨迹
     plt.legend(loc='upper right')
-    plt.savefig('task_space_'+str(it)+'.png', dpi=200)
+    
+    # 确保输出目录存在
+    output_dir = 'media/czq_ref'
+    os.makedirs(output_dir, exist_ok=True)
+    plt.savefig(f'{output_dir}/task_space_{it}.png', dpi=200)
 
 # =======================
 # 构建 C-space 网格
@@ -259,6 +264,12 @@ def plot2DCSpace():
               edgecolor='black',  # 边框颜色
               fontsize=10)  # 字体大小
     plt.tight_layout()
+    
+    # 保存图片到指定目录
+    output_dir = 'media/czq_ref'
+    os.makedirs(output_dir, exist_ok=True)
+    plt.savefig(f'{output_dir}/c_space.png', dpi=200)
+    plt.show()
 
 # 速度、加速度绘图
 q_traj, dq_traj, ddq_traj = vpsto.vptraj.get_trajectory(sol.p_best, q0, dq0=dq0,dqT=dqT, T=sol.T_best)
@@ -269,10 +280,19 @@ def plotvel_separate():
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), dpi=100, sharex=True)
     ax1.plot(dq_traj[:, 0], 'b-', linewidth=1.5, label='Joint 1 Velocity')
     ax1.plot(dq_traj[:, 1], 'g-', linewidth=1.5, label='Joint 2 Velocity')
+    ax1.set_ylabel('Velocity (rad/s)')
     ax1.legend(loc='upper right')
     ax2.plot(ddq_traj[:, 0], 'r-', linewidth=1.5, label='Joint 1 Acceleration')
     ax2.plot(ddq_traj[:, 1], 'm-', linewidth=1.5, label='Joint 2 Acceleration')
+    ax2.set_ylabel('Acceleration (rad/s²)')
+    ax2.set_xlabel('Time Steps')
     ax2.legend(loc='upper right')
+    plt.tight_layout()
+    
+    # 保存图片到指定目录
+    output_dir = 'media/czq_ref'
+    os.makedirs(output_dir, exist_ok=True)
+    plt.savefig(f'{output_dir}/velocity_acceleration.png', dpi=200)
     plt.show()
     return fig
 
@@ -283,6 +303,17 @@ history_array = np.array(sol.history)
 his_best = np.array(sol.history_pos_best)
 
 def video():
+    import os
+    
+    # 确保输出目录存在
+    output_dir = 'media/czq_ref'
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 检查历史数据
+    if len(history_array) == 0:
+        print("Warning: No history data available for animation")
+        return
+    
     fig = plot2DCSpaceBackGround()
     fps = 30
     dt_control = 0.1
@@ -290,6 +321,7 @@ def video():
     sample_lines = []
     pred_line, = ax.plot([], [], 'b', lw=1.5, label='Best Trajectory')
     time_text = ax.text(0.02, 0.95, '', transform=ax.transAxes, color='k', fontsize=14)
+    
     for i in range(len(history_array[0])):
         line, = ax.plot([], [], 'orange', alpha=.25, label='Sample' if i == 0 else "")
         sample_lines.append(line)
@@ -297,40 +329,161 @@ def video():
     def init():
         pred_line.set_data([], [])
         time_text.set_text('')
-        return time_text, pred_line
+        for line in sample_lines:
+            line.set_data([], [])
+        return (*sample_lines, pred_line, time_text)
 
     def animate(i_):
         i = np.min([len(history_array) - 1, int(i_ / (dt_control * fps))])
-        for j in range(len(history_array[i])):
+        
+        # 更新采样轨迹
+        for j in range(min(len(history_array[i]), len(sample_lines))):
             sample_lines[j].set_data(history_array[i][j][:, 0], history_array[i][j][:, 1])
+        
+        # 更新最优轨迹
         pred_line.set_data(his_best[i][:, 0], his_best[i][:, 1])
         time_text.set_text('time = %.1f' % (i * dt_control * 0.05))
+        
         # 判断是否为最后一帧
         is_last_frame = (i == len(history_array) - 1)
+        
         # 动态创建或更新点（只在最后一刻显示）
         if not hasattr(animate, 'final_point'):
-            # 首次调用时创建点对象（初始状态隐藏）
             animate.final_point, = ax.plot([], [], 'rx', markersize=10, label='Via Point')
+        
         if is_last_frame:
             points = np.array(sol.p_best).reshape(-1, 2) 
-            # 最后一帧：显示点（位置取 his_best 的最后一个点）
             x, y = points[:, 0], points[:, 1]
             animate.final_point.set_data([x], [y])
             animate.final_point.set_visible(True)
         else:
-            # 非最后一帧：隐藏点
             animate.final_point.set_visible(False)
+        
         ax.legend(loc='upper right')
-        # 返回所有需要更新的对象（包括点）
         return (*sample_lines, pred_line, time_text, animate.final_point)
 
+    # 创建动画
     anim = animation.FuncAnimation(fig, animate, init_func=init,
                                    frames=int(len(history_array) * dt_control * fps),
                                    interval=1000.0 / fps, blit=True)
-    anim.save(f'point_traj_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}.mp4', fps=fps, codec='libx264')
+    
+    # 生成文件名
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    mp4_filename = f'{output_dir}/point_traj_{timestamp}.mp4'
+    gif_filename = f'{output_dir}/point_traj_{timestamp}.gif'
+    
+    # 优先尝试保存为 MP4
+    try:
+        # 使用 ffmpeg writer
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=fps, metadata=dict(artist='VP-STO'), bitrate=1800, 
+                       extra_args=['-vcodec', 'libx264', '-pix_fmt', 'yuv420p'])
+        anim.save(mp4_filename, writer=writer)
+        print(f"MP4 视频已保存到: {mp4_filename}")
+    except Exception as e:
+        print(f"MP4 保存失败: {e}")
+        try:
+            # 备选方案：保存为 GIF
+            anim.save(gif_filename, writer='pillow', fps=15)
+            print(f"GIF 动画已保存到: {gif_filename}")
+        except Exception as e2:
+            print(f"GIF 保存也失败: {e2}")
+            print("将直接显示动画...")
+            plt.show()
+    
+    plt.close(fig)
 
 # 执行绘图和视频生成
+print("开始生成 Cartesian space 图片...")
 plotCartesianSpace(100)
+print("Cartesian space 图片生成完成")
+
+print("开始生成 C-space 图片...")
 plot2DCSpace()
+print("C-space 图片生成完成")
+
+print("开始生成速度/加速度图...")
 plotvel_separate()
+print("速度/加速度图生成完成")
+
+print(f"历史数据长度: {len(history_array)}")
+print(f"最优历史数据长度: {len(his_best)}")
+
+print("开始生成视频...")
 video()
+print("所有任务完成")
+
+# 备用视频生成函数（如果上面的失败）
+def video_alternative():
+    """备用视频生成方法 - 使用不同的编码器设置"""
+    import os
+    
+    output_dir = 'media/czq_ref'
+    os.makedirs(output_dir, exist_ok=True)
+    
+    if len(history_array) == 0:
+        print("Warning: No history data available for animation")
+        return
+    
+    fig = plot2DCSpaceBackGround()
+    fps = 20  # 降低帧率
+    ax = plt.gca()
+    sample_lines = []
+    pred_line, = ax.plot([], [], 'b', lw=1.5, label='Best Trajectory')
+    time_text = ax.text(0.02, 0.95, '', transform=ax.transAxes, color='k', fontsize=14)
+    
+    for i in range(len(history_array[0])):
+        line, = ax.plot([], [], 'orange', alpha=.25, label='Sample' if i == 0 else "")
+        sample_lines.append(line)
+
+    def animate(frame):
+        i = min(len(history_array) - 1, frame)
+        for j in range(min(len(history_array[i]), len(sample_lines))):
+            sample_lines[j].set_data(history_array[i][j][:, 0], history_array[i][j][:, 1])
+        pred_line.set_data(his_best[i][:, 0], his_best[i][:, 1])
+        time_text.set_text(f'Iteration: {i}')
+        return (*sample_lines, pred_line, time_text)
+
+    anim = animation.FuncAnimation(fig, animate, frames=len(history_array), 
+                                   interval=1000//fps, blit=False, repeat=True)
+    
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    
+    # 尝试不同的保存方法
+    success = False
+    
+    # 方法1: 简化的 MP4 (优先选择)
+    if not success:
+        try:
+            filename = f'{output_dir}/point_traj_{timestamp}.mp4'
+            anim.save(filename, writer='ffmpeg', fps=fps)
+            print(f"MP4已保存到: {filename}")
+            success = True
+        except Exception as e:
+            print(f"MP4保存失败: {e}")
+    
+    # 方法2: GIF
+    if not success:
+        try:
+            filename = f'{output_dir}/point_traj_{timestamp}.gif'
+            anim.save(filename, writer='pillow', fps=fps)
+            print(f"GIF已保存到: {filename}")
+            success = True
+        except Exception as e:
+            print(f"GIF保存失败: {e}")
+    
+    # 方法3: HTML
+    if not success:
+        try:
+            filename = f'{output_dir}/point_traj_{timestamp}.html'
+            anim.save(filename, writer='html', fps=fps)
+            print(f"HTML动画已保存到: {filename}")
+            success = True
+        except Exception as e:
+            print(f"HTML保存失败: {e}")
+    
+    if not success:
+        print("所有保存方法都失败，显示动画...")
+        plt.show()
+    
+    plt.close(fig)

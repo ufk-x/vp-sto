@@ -399,6 +399,9 @@ def video(his_sol):
     anim.save(f'point_traj_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}.mp4', fps=fps, codec='libx264')
 
 # 执行绘图和视频生成
+print("plot2DCSpace...")
 plot2DCSpace()
+print("video...")
 video(sol_his)
+print("plotvel_separate...")
 plotvel_separate()

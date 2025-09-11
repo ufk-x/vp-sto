@@ -1,3 +1,14 @@
+'''
+Author: Fang Kai[thissfk@qq.com]
+Date: 2025-09
+LastEditors: Fang Kai[thissfk@qq.com]
+LastEditTime: 2025-09
+FilePath: arm_mpc.py
+Description: 
+           If you need more information,
+please contact Fang Kai[thissfk@qq.com] to get an access.   
+Copyright (c) 2025 by Fang Kai, All Rights Reserved. 
+'''
 import numpy as np
 from vpsto.vpsto import VPSTO,VPSTOOptions
 import matplotlib.pyplot as plt 
@@ -251,5 +262,5 @@ def animate(i_):
 anim = animation.FuncAnimation(fig, animate, init_func=init,
                                frames=int(len(q_sim) * dt_control * fps), interval=1e3/fps, blit=True)
 
-anim.save('arm_mpc.mp4', fps=fps, codec='libx264')
+anim.save('media/czq_ref/arm_mpc.mp4', fps=fps, codec='libx264')
 
