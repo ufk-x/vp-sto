@@ -1,3 +1,14 @@
+'''
+Author: Fang Kai[thissfk@qq.com]
+Date: 2025-09
+LastEditors: Fang Kai[thissfk@qq.com]
+LastEditTime: 2025-09
+FilePath: arm_move3.py
+Description: 
+           If you need more information,
+please contact Fang Kai[thissfk@qq.com] to get an access.   
+Copyright (c) 2025 by Fang Kai, All Rights Reserved. 
+'''
 import numpy as np
 from vpsto.vpsto import VPSTO,VPSTOOptions
 import matplotlib.pyplot as plt 
