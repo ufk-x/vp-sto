@@ -129,7 +129,7 @@ def plotRobot(ax, robot, q, color='m'):
 # 创建机械臂实例
 robot = Manipulator()
 # 定义起始和目标末端位置
-start_pos = np.array([1, 1])   # 起始位置
+start_pos = np.array([0, 1])   # 起始位置
 goal_pos = np.array([1, -1])   # 目标位置
 start_q = robot.ik(start_pos)[0]  # 计算起始位置的关节角度（肘部向下解）
 goal_q = robot.ik(goal_pos)[0]    # 计算目标位置的关节角度（肘部向下解）
@@ -165,7 +165,6 @@ def loss(candidates):
 opt = VPSTOOptions(ndof=2)
 opt.vel_lim = np.array([1, 1])
 opt.acc_lim = np.array([0.5, 0.5])
-# opt.acc_lim = np.array([2.5, 2.5])
 opt.N_via = 4
 opt.N_eval = 100
 opt.pop_size = 25
@@ -223,8 +222,8 @@ def create_animation():
   fig, ax = plt.subplots(dpi=100)
   ax.set_xticks([])
   ax.set_yticks([])
-  ax.set_xlim(-0.1, 2.1)
-  ax.set_ylim(-1.1, 1.1)
+  ax.set_xlim(-2, 2)
+  ax.set_ylim(-1.5, 1.5)
 
   # 绘制起始和目标配置
   # 末端执行器位置
