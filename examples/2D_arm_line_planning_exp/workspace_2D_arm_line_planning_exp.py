@@ -3,7 +3,7 @@ Author: Fang Kai[thissfk@qq.com]
 Date: 2025-09
 LastEditors: Fang Kai[thissfk@qq.com]
 LastEditTime: 2025-09
-FilePath: 2D_arm_line_planning_exp.py
+FilePath: workspace_2D_arm_line_planning_exp.py
 Description: 
            If you need more information,
 please contact Fang Kai[thissfk@qq.com] to get an access.   
@@ -130,96 +130,119 @@ def plotRobot(ax, robot, q, color='m'):
 robot = Manipulator()
 # 定义起始和目标末端位置
 start_pos = np.array([1, 1])   # 起始位置
+# start_pos = np.array([0, 1])   # 起始位置；
 goal_pos = np.array([1, -1])   # 目标位置
+vel_lim = np.array([1, 1]) # 定义关节速度限制
+acc_lim = np.array([0.5, 0.5]) # 定义关节加速度限制
+
 start_q = robot.ik(start_pos)[0]  # 计算起始位置的关节角度（肘部向下解）
 goal_q = robot.ik(goal_pos)[0]    # 计算目标位置的关节角度（肘部向下解）
+# 初始化轨迹存储变量
+q_profile = [start_q]  # 初始化关节角度轨迹
+dq_profile = [np.zeros_like(start_q)]  # 初始化关节速度轨迹
+ddq_profile = [np.zeros_like(start_q)]  # 初始化关节加速度轨迹
 
-# 定义使得末端移动最短的损失函数
-def loss(candidates):
-    costs = []
-    q_logs = candidates['pos']
-    # 计算每个候选解末端行走的路程
-    for i in range(q_logs.shape[0]): 
-        dis = 0
-        q_log = q_logs[i]
-        end_log = [robot.fk(q)[2] for q in q_log]  # 计算每个时间步的末端位置
-        for j in range(len(end_log)-1):
-            dis += np.linalg.norm(end_log[j+1]-end_log[j])  # 累加末端位置间的距离
-        costs.append(dis)  # 将总距离作为代价
-    return np.array(costs)  # 返回所有候选解的代价数组
+def dX2dq(dX, q):
+    """
+    计算末端速度与关节速度的雅可比矩阵
+    参数：
+    dX: 2x1数组，末端执行器速度
+    q: 2x1数组，关节角度
+    返回：2x2数组，雅可比矩阵
+    """
+    J = np.array([
+        [-robot.l[0]*np.sin(q[0]) - robot.l[1]*np.sin(q[0]+q[1]), -robot.l[1]*np.sin(q[0]+q[1])],
+        [ robot.l[0]*np.cos(q[0]) + robot.l[1]*np.cos(q[0]+q[1]),  robot.l[1]*np.cos(q[0]+q[1])]
+    ])
+    # 使用伪逆计算关节速度
+    dq = np.linalg.pinv(J).dot(dX)
+    return dq
 
-"""测试损失函数"""
-# pos_log = np.linspace(start_pos, goal_pos, 5)  # 生成从起始到目标的线性插值轨迹
-# print(pos_log)
-# q_log = [robot.ik(pos)[0] for pos in pos_log]  # 计算每个位置对应的关节角度（肘部向下解）
-# fig, ax = plt.subplots()  # 创建绘图窗口和坐标轴
-# for q in q_log:
-#     plotRobot(ax, robot, q, color='b')  # 绘制轨迹上的机械臂位置
-# ax.set_aspect('equal')  # 设置坐标轴比例相等
-# plt.show()  # 显示绘图
-# candidates = {'pos': np.array([q_log])}  # 创建候选解字典
-# cost = loss(candidates)  # 计算损失
-# print(f"Cost of straight line in joint space: {cost[0]}")  # 打印损失值
+h = 0.001 # 定义时间步长
+q = start_q.copy()  # 初始化当前关节角度
+dq_rec = 0
+pos_tolerance = 1e-2  # 定义关节角度误差容忍度
+iteration = 0  # 初始化迭代计数器
+# 迭代更新关节角度，直到达到目标位置
+while np.linalg.norm(goal_pos - robot.fk(q)[-1]) > pos_tolerance:
+    print(f"迭代次数: {iteration}, 当前位置: {robot.fk(q)[-1]}, 目标位置: {goal_pos}, 位置误差: {np.linalg.norm(goal_pos - robot.fk(q)[-1])}")
+    # 计算关节速度
+    dX = (goal_pos - robot.fk(q)[-1]) / np.linalg.norm(goal_pos - robot.fk(q)[-1]) * 0.5  # 定义末端速度方向和大小
+    dq = dX2dq(dX, q)
+    ddq = (dq - dq_rec) / h  # 计算关节加速度
+    ddq = np.clip(ddq, -acc_lim, acc_lim)  # 限制加速度
+    dq = dq_rec + ddq * h  # 更新关节速度
+    dq = np.clip(dq, -vel_lim, vel_lim)  # 限制速度
+    dq_rec = dq.copy()  # 记录当前关节速度
+    # 更新关节角度
+    q += dq * h
+    # 记录关节角度和速度
+    q_profile.append(q.copy())
+    dq_profile.append(dq.copy())
+    iteration += 1  # 更新迭代计数器
 
-# 设置VPSTO优化选项
-opt = VPSTOOptions(ndof=2)
-opt.vel_lim = np.array([1, 1])
-opt.acc_lim = np.array([0.5, 0.5])
-opt.N_via = 4
-opt.N_eval = 100
-opt.pop_size = 25
-opt.max_iter = 200
-opt.sigma_init = 1.5
-traj_opt = VPSTO(opt)
-# 进行轨迹优化
-sol = traj_opt.minimize(loss, start_q, qT=goal_q, dqT=np.zeros_like(goal_q))
-# 提取优化结果并绘图
-t_traj = np.linspace(0, sol.T_best, 1000)
-q_log, dq_log, ddq_log = sol.get_posvelacc(t_traj)
+# 打印数据
+print(f"迭代次数: {iteration}, 轨迹点数: {len(q_profile)}")
+q_profile = np.array(q_profile)      # 转换为numpy数组
+dq_profile = np.array(dq_profile)    # 转换为numpy数组
+ddq_profile = np.diff(dq_profile, axis=0) / h  # 计算加速度
 
 # 绘制速度曲线
-plt.subplot(2,1,1)
-plt.plot(t_traj, dq_log[:, 0], 'b-', label='DOF 1 velocity')
-plt.plot(t_traj, dq_log[:, 1], 'r-', label='DOF 2 velocity')
-plt.axhline(-opt.vel_lim[0], color='r', linestyle='-.', label='DOF 1 vel limit') # 负方向限制线
-plt.axhline(opt.vel_lim[1], color='r', linestyle='-.', label='DOF 2 vel limit')
-plt.xlabel('Time [s]')
-plt.ylabel('Velocity [rad/s]')
-plt.title('Joint Velocities')
-plt.legend()
-plt.grid()
+time_array = np.arange(len(dq_profile)) * h  # 计算时间数组
+fig, ax = plt.subplots(2, 1, figsize=(6, 8), dpi=100)  # 创建2行1列的子图
+ax[0].plot(time_array, dq_profile[:,0], 'b-', label='DOF 1 velocity')  # 绘制第一个关节角度
+ax[0].plot(time_array, dq_profile[:,1], 'r-', label='DOF 2 velocity')  # 绘制第二个关节角度
+ax[0].axhline(-vel_lim[0],color = 'r',linestyle='-.',label='DOF 1 vel limit')
+ax[0].axhline(vel_lim[0],color = 'r',linestyle='-.')
+ax[0].axhline(vel_lim[1],color = 'r',linestyle='-.',label='DOF 2 vel limit')
+ax[0].axhline(-vel_lim[1],color = 'r',linestyle='-.')
+ax[0].set_title('Joint Velocities')
+ax[0].set_xlabel('Time [s]')
+ax[0].set_ylabel('Velocity [rad/s]')
+ax[0].legend()
+ax[0].grid()
 # 绘制加速度曲线
-plt.subplot(2,1,2)
-plt.plot(t_traj, ddq_log[:, 0], 'b-', label='DOF 1 acceleration')
-plt.plot(t_traj, ddq_log[:, 1], 'r-', label='DOF 2 acceleration')
-plt.axhline(-opt.acc_lim[0], color='r', linestyle='-.', label='DOF 1 acc limit') # 负方向限制线
-plt.axhline(opt.acc_lim[1], color='r', linestyle='-.', label='DOF 2 acc limit')
-plt.xlabel('Time [s]')
-plt.ylabel('Acceleration [rad/s²]')
-plt.title('Joint Accelerations')
-plt.legend()
-plt.grid()
-plt.tight_layout()
-plt.savefig('./examples/2D_arm_line_planning_exp/media/line_planning_vel_acc.png', dpi=300)
-print("Velocity and acceleration profiles saved as 'line_planning_vel_acc.png'")
-# 绘制配置空间轨迹
+time_array_ddq = np.arange(len(ddq_profile)) * h  # 计算加速度时间数组
+ax[1].plot(time_array_ddq, ddq_profile[:,0], 'b-', label='DOF 1 acceleration')  # 绘制第一个关节加速度
+ax[1].plot(time_array_ddq, ddq_profile[:,1], 'r-', label='DOF 2 acceleration')  # 绘制第二个关节加速度
+ax[1].axhline(acc_lim[0],color='r',linestyle='-.',label='DOF 1 acc limit')
+ax[1].axhline(-acc_lim[0],color='r',linestyle='-.')
+ax[1].axhline(acc_lim[1],color='r',linestyle='-.',label='DOF 2 acc limit')
+ax[1].axhline(-acc_lim[1],color='r',linestyle='-.')
+ax[1].set_title('Joint Accelerations')
+ax[1].set_xlabel('Time [s]')
+ax[1].set_ylabel('Acceleration [rad/s²]')
+ax[1].legend()
+ax[1].grid()
+plt.tight_layout()  # 自动调整子图间距
+plt.savefig('./examples/2D_arm_line_planning_exp/media/workspace_line_planning_vel_acc.png')
+print(f"saved as 'workspace_line_planning_vel_acc.png'")
+plt.close()  # 关闭当前图形
+
+
+# 描绘配置空间轨迹
 fig, ax = plt.subplots()
-for q in q_log:
-    plt.plot(q[0], q[1], 'bo', markersize=2)  # 绘制轨迹点
-plt.plot(start_q[0], start_q[1], 'go', markersize=10, label='Start')  # 起始点
-plt.plot(goal_q[0], goal_q[1], 'r*', markersize=10, label='Goal')    # 目标点
-plt.title('Configuration Space Trajectory')
-plt.xlabel('Joint 1 Angle [rad]')
-plt.ylabel('Joint 2 Angle [rad]')
-plt.legend()
-plt.grid()
-plt.axis('equal')
-plt.savefig('./examples/2D_arm_line_planning_exp/media/line_planning_config_space.png', dpi=300)
-print("Configuration space trajectory saved as 'line_planning_config_space.png'")
+ax.set_aspect('equal')
+# 绘制关节角度轨迹
+ax.plot(q_profile[:,0], q_profile[:,1], 'b-', label='q path')  # 绘制关节角度轨迹
+ax.plot(start_q[0], start_q[1], 'go', markersize=8, label='start q')  # 绘制起始关节角度
+ax.plot(goal_q[0], goal_q[  1], 'r*', markersize=8, label='goal q')  # 绘制目标关节角度
+ax.set_title('Configuration Space Trajectory')
+ax.set_xlabel('q1 [rad]')
+ax.set_ylabel('q2 [rad]')
+ax.grid()
+ax.axis('equal')
+ax.legend()
+plt.savefig('./examples/2D_arm_line_planning_exp/media/workspace_line_planning_c_space_traj.png')
+print(f"saved as 'workspace_line_planning_c_space_traj.png'")
+plt.close()  # 关闭当前图形
+
+
 # 绘制机械臂运动动画
 def create_animation():
   import matplotlib.animation as animation
   fig, ax = plt.subplots(dpi=100)
+  q_log = q_profile  # 使用之前计算的轨迹数据
   ax.set_xticks([])
   ax.set_yticks([])
   ax.set_xlim(-2, 2)
@@ -300,7 +323,7 @@ def create_animation():
   
   # 计算动画参数以匹配实际轨迹时间
   total_frames = len(q_log)
-  actual_duration = sol.T_best  # 实际轨迹执行时间（秒）
+  actual_duration = iteration * h  # 实际轨迹执行时间（秒）
   fps = 30  # 设置帧率为30fps
   
   # 计算每帧的时间间隔（毫秒）
@@ -319,23 +342,30 @@ def create_animation():
   try:
     # 首先尝试保存为mp4格式，使用计算出的fps确保时间匹配
     video_fps = total_frames / actual_duration  # 根据实际时间计算fps
-    anim.save('./examples/2D_arm_line_planning_exp/media/line_planning_trajectory.mp4', 
+    anim.save('./examples/2D_arm_line_planning_exp/media/workspace_line_planning_trajectory.mp4', 
               writer='ffmpeg', fps=video_fps, bitrate=1800)
-    print(f"Animation saved as 'line_planning_trajectory.mp4' (fps: {video_fps:.1f})")
+    print(f"Animation saved as 'workspace_line_planning_trajectory.mp4' (fps: {video_fps:.1f})")
   except Exception as e:
     print(f"Could not save mp4 file: {e}")
     try:
         # 如果mp4失败，尝试gif
         gif_fps = min(10, total_frames / actual_duration)  # gif帧率限制
-        anim.save('./examples/2D_arm_line_planning_exp/media/line_planning_trajectory.gif', 
+        anim.save('./examples/2D_arm_line_planning_exp/media/workspace_line_planning_trajectory.gif', 
                   writer='pillow', fps=gif_fps)
-        print(f"Animation saved as 'line_planning_trajectory.gif' (fps: {gif_fps:.1f})")
+        print(f"Animation saved as 'workspace_line_planning_trajectory.gif' (fps: {gif_fps:.1f})")
     except Exception as e:
         print(f"Could not save gif file: {e}")
         print("Animation created but not saved. You can view it in the notebook.")
   
   plt.tight_layout()
+  
+  # 保存完成后立即关闭当前图形，释放资源
+  plt.close(fig)
+  
   return anim
 
 # 调用函数创建动画
 animation = create_animation()  # 创建并保存动画
+
+# 清理资源，避免终端卡住
+plt.close('all')  # 关闭所有matplotlib图形窗口
